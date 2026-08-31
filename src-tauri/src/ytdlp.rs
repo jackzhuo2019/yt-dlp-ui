@@ -54,6 +54,7 @@ pub async fn run_download(
             std::env::var("PATH").unwrap_or_default()
         );
         command.env("PATH", &extra_path);
+        command.env("PYTHONUTF8", "1");
         command.args([
             &url_owned,
             "-f", &fmt,
