@@ -60,7 +60,6 @@ pub async fn run_download(
             "-o", &format!("{}/%(title)s.%(ext)s", out),
             "--no-playlist", "--newline",
             "--windows-filenames",
-            "--extractor-args", "youtube:player_client=web",
         ]);
         if !cookies.is_empty() {
             command.args(["--cookies-from-browser", &cookies]);

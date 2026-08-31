@@ -118,6 +118,7 @@ export default function UrlInput() {
           <option value="edge">Edge</option>
           <option value="firefox">Firefox</option>
         </select>
+        <span className="text-xs text-gray-600">(需先关闭浏览器)</span>
         <button
           onClick={handleDownload}
           disabled={!url.trim()}
