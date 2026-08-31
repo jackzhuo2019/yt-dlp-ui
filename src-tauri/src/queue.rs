@@ -16,6 +16,7 @@ pub struct DownloadTask {
     pub title: String,
     pub format_id: String,
     pub output_dir: String,
+    pub cookies_from: String,
     pub status: TaskStatus,
     pub progress: f64,
     pub speed: String,
@@ -132,10 +133,10 @@ impl DownloadQueue {
                 let _ = app_handle.emit("task-updated", &task_id);
 
                 // 获取任务信息
-                let (url, format_id, output_dir) = {
+                let (url, format_id, output_dir, cookies_from) = {
                     let tasks = queue_ref.tasks.lock().await;
                     let t = tasks.get(&task_id).unwrap();
-                    (t.url.clone(), t.format_id.clone(), t.output_dir.clone())
+                    (t.url.clone(), t.format_id.clone(), t.output_dir.clone(), t.cookies_from.clone())
                 };
 
                 let cancel_flag = {
@@ -157,6 +158,7 @@ impl DownloadQueue {
                     &url,
                     &format_id,
                     &output_dir,
+                    &cookies_from,
                     &queue_ref.ytdlp_path,
                     app_handle.clone(),
                     cancel_flag.clone(),

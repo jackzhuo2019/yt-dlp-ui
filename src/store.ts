@@ -8,10 +8,12 @@ interface AppStore {
   history: HistoryRecord[];
   activeTab: "download" | "history";
   outputDir: string;
+  cookiesFrom: string;
 
   initOutputDir: () => Promise<void>;
   setOutputDir: (dir: string) => void;
-  addTask: (url: string, title: string, formatId: string) => Promise<void>;
+  setCookiesFrom: (browser: string) => void;
+  addTask: (url: string, title: string, formatId: string, cookiesFrom: string) => Promise<void>;
   refreshTasks: () => Promise<void>;
   pauseTask: (id: string) => Promise<void>;
   cancelTask: (id: string) => Promise<void>;
@@ -26,6 +28,7 @@ export const useStore = create<AppStore>((set, get) => ({
   history: [],
   activeTab: "download",
   outputDir: "",
+  cookiesFrom: "",
 
   initOutputDir: async () => {
     try {
@@ -38,9 +41,11 @@ export const useStore = create<AppStore>((set, get) => ({
 
   setOutputDir: (dir: string) => set({ outputDir: dir }),
 
-  addTask: async (url: string, title: string, formatId: string) => {
+  setCookiesFrom: (browser: string) => set({ cookiesFrom: browser }),
+
+  addTask: async (url: string, title: string, formatId: string, cookiesFrom: string) => {
     const outputDir = get().outputDir;
-    await invoke("add_task", { url, title, formatId, outputDir });
+    await invoke("add_task", { url, title, formatId, outputDir, cookiesFrom: cookiesFrom || null });
     await get().refreshTasks();
   },
 

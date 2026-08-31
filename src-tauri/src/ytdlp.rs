@@ -26,6 +26,7 @@ pub async fn run_download(
     url: &str,
     format_id: &str,
     output_dir: &str,
+    cookies_from: &str,
     ytdlp_path: &str,
     app_handle: tauri::AppHandle,
     cancel_flag: Arc<AtomicBool>,
@@ -36,6 +37,7 @@ pub async fn run_download(
     let fmt = format_id.to_string();
     let out = output_dir.to_string();
     let tid = task_id.to_string();
+    let cookies = cookies_from.to_string();
 
     let result = tokio::task::spawn_blocking(move || {
         let mut command = Command::new(&ytdlp);
@@ -60,6 +62,9 @@ pub async fn run_download(
             "--windows-filenames",
             "--extractor-args", "youtube:player_client=web",
         ]);
+        if !cookies.is_empty() {
+            command.args(["--cookies-from-browser", &cookies]);
+        }
 
         let mut last_filepath = String::new();
         let result = run_command_with_cancel(

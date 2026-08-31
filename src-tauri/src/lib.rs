@@ -21,6 +21,7 @@ async fn add_task(
     title: String,
     format_id: String,
     output_dir: String,
+    cookies_from: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
     let task = DownloadTask {
@@ -29,6 +30,7 @@ async fn add_task(
         title,
         format_id,
         output_dir,
+        cookies_from: cookies_from.unwrap_or_default(),
         status: TaskStatus::Queued,
         progress: 0.0,
         speed: String::new(),

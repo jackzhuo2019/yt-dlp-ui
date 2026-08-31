@@ -10,6 +10,8 @@ export default function UrlInput() {
   const addTask = useStore((s) => s.addTask);
   const outputDir = useStore((s) => s.outputDir);
   const setOutputDir = useStore((s) => s.setOutputDir);
+  const cookiesFrom = useStore((s) => s.cookiesFrom);
+  const setCookiesFrom = useStore((s) => s.setCookiesFrom);
 
   const handlePickFolder = async () => {
     const selected = await open({ directory: true, multiple: false });
@@ -33,7 +35,7 @@ export default function UrlInput() {
     const trimmed = url.trim();
     if (!trimmed) return;
     const format = quality === "1080" ? "best[height<=1080]/best" : "best[height<=720]/best";
-    addTask(trimmed, trimmed, format);
+    addTask(trimmed, trimmed, format, cookiesFrom);
     setUrl("");
   };
 
@@ -81,7 +83,7 @@ export default function UrlInput() {
         </div>
       </div>
 
-      {/* 画质选择 + 下载 */}
+      {/* 画质选择 + Cookies + 下载 */}
       <div className="flex items-center gap-3">
         <span className="text-xs text-gray-500">画质:</span>
         <button
@@ -104,6 +106,18 @@ export default function UrlInput() {
         >
           高清 720P
         </button>
+        <select
+          value={cookiesFrom}
+          onChange={(e) => setCookiesFrom(e.target.value)}
+          className="text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-400
+                     focus:outline-none focus:border-red-500"
+          title="YouTube 要求登录，选择浏览器读取 cookies（需先关闭该浏览器）"
+        >
+          <option value="">无 Cookies</option>
+          <option value="chrome">Chrome</option>
+          <option value="edge">Edge</option>
+          <option value="firefox">Firefox</option>
+        </select>
         <button
           onClick={handleDownload}
           disabled={!url.trim()}
