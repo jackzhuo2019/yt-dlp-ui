@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicepkg/vscode-tauri/main/schemas/tauri.conf.schema.json",
+  "productName": "yt-dlp UI",
+  "version": "0.1.0",
+  "identifier": "com.yt-dlp-ui.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "yt-dlp UI",
+        "width": 960,
+        "height": 700,
+        "minWidth": 640,
+        "minHeight": 480,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": [
+      "../yt-dlp.exe"
+    ]
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}

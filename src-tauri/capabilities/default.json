@@ -1,0 +1,21 @@
+{
+  "identifier": "default",
+  "description": "Default capability for yt-dlp UI",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "yt-dlp",
+          "cmd": "yt-dlp.exe",
+          "args": true
+        }
+      ]
+    },
+    "shell:allow-open",
+    "dialog:default",
+    "fs:default"
+  ]
+}

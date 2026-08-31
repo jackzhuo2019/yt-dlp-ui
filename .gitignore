@@ -1,0 +1,9 @@
+node_modules/
+dist/
+target/
+*.exe
+!.gitignore
+*.part
+*.ytdl
+*.mp4
+*.webm
