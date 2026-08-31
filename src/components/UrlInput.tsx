@@ -4,13 +4,10 @@ import { open } from "@tauri-apps/plugin-dialog";
 
 export default function UrlInput() {
   const [url, setUrl] = useState("");
-  const [batchMode, setBatchMode] = useState(false);
-  const [batchUrls, setBatchUrls] = useState("");
+  const [quality, setQuality] = useState<"1080" | "720">("1080");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const fetchFormats = useStore((s) => s.fetchFormats);
-  const fetchingUrl = useStore((s) => s.fetchingUrl);
-  const formatError = useStore((s) => s.formatError);
+  const addTask = useStore((s) => s.addTask);
   const outputDir = useStore((s) => s.outputDir);
   const setOutputDir = useStore((s) => s.setOutputDir);
 
@@ -21,13 +18,6 @@ export default function UrlInput() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = url.trim();
-    if (!trimmed) return;
-    fetchFormats(trimmed);
-  };
-
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -35,20 +25,20 @@ export default function UrlInput() {
         setUrl(text.trim());
       }
     } catch {
-      // 剪贴板读取失败，忽略
+      // 忽略
     }
   };
 
-  const handleBatchSubmit = () => {
-    const urls = batchUrls
-      .split("\n")
-      .map((u) => u.trim())
-      .filter(Boolean);
-    if (urls.length === 0) return;
-    fetchFormats(urls[0]);
-    if (urls.length > 1) {
-      setBatchUrls(urls.slice(1).join("\n"));
-    }
+  const handleDownload = () => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    const format = quality === "1080" ? "best[height<=1080]" : "best[height<=720]";
+    addTask(trimmed, trimmed, format);
+    setUrl("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleDownload();
   };
 
   return (
@@ -59,97 +49,70 @@ export default function UrlInput() {
         <button
           onClick={handlePickFolder}
           className="flex-1 text-left text-xs bg-gray-800 border border-gray-700 rounded px-3 py-1.5
-                     text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors
-                     truncate"
+                     text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors truncate"
           title={outputDir || "点击选择文件夹"}
         >
           {outputDir || "点击选择文件夹..."}
         </button>
       </div>
 
-      <div className="flex items-center gap-2 mb-2">
-        <button
-          onClick={() => setBatchMode(false)}
-          className={`text-xs px-2.5 py-1 rounded ${
-            !batchMode
-              ? "bg-red-600 text-white"
-              : "bg-gray-800 text-gray-400 hover:text-white"
-          }`}
-        >
-          单个下载
-        </button>
-        <button
-          onClick={() => setBatchMode(true)}
-          className={`text-xs px-2.5 py-1 rounded ${
-            batchMode
-              ? "bg-red-600 text-white"
-              : "bg-gray-800 text-gray-400 hover:text-white"
-          }`}
-        >
-          批量下载
-        </button>
-      </div>
-
-      {!batchMode ? (
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <div className="flex-1 relative">
-            <input
-              ref={inputRef}
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="粘贴视频 / 播放列表 URL ..."
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm
-                         placeholder-gray-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500
-                         transition-colors"
-            />
-            <button
-              type="button"
-              onClick={handlePaste}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500
-                         hover:text-gray-300 bg-gray-700 px-2 py-0.5 rounded transition-colors"
-            >
-              粘贴
-            </button>
-          </div>
-          <button
-            type="submit"
-            disabled={fetchingUrl === url || !url.trim()}
-            className="px-5 py-2.5 bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500
-                       text-white text-sm font-medium rounded-lg transition-colors shrink-0"
-          >
-            {fetchingUrl === url ? "获取中..." : "获取格式"}
-          </button>
-        </form>
-      ) : (
-        <div className="flex flex-col gap-2">
-          <textarea
-            value={batchUrls}
-            onChange={(e) => setBatchUrls(e.target.value)}
-            placeholder={"每行一个 URL，支持批量粘贴...\n\nhttps://www.youtube.com/watch?v=xxx\nhttps://www.youtube.com/watch?v=yyy"}
-            rows={4}
+      {/* URL 输入 */}
+      <div className="flex gap-2 mb-3">
+        <div className="flex-1 relative">
+          <input
+            ref={inputRef}
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="粘贴视频 / 播放列表 URL ..."
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm
                        placeholder-gray-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500
-                       transition-colors resize-none"
+                       transition-colors"
           />
-          <div className="flex justify-end">
-            <button
-              onClick={handleBatchSubmit}
-              disabled={!batchUrls.trim()}
-              className="px-5 py-2 bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500
-                         text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              获取格式
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handlePaste}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500
+                       hover:text-gray-300 bg-gray-700 px-2 py-0.5 rounded transition-colors"
+          >
+            粘贴
+          </button>
         </div>
-      )}
+      </div>
 
-      {formatError && (
-        <div className="mt-2 p-2.5 bg-red-900/30 border border-red-800 rounded-lg text-sm text-red-400">
-          {formatError}
-        </div>
-      )}
+      {/* 画质选择 + 下载 */}
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-gray-500">画质:</span>
+        <button
+          onClick={() => setQuality("1080")}
+          className={`text-xs px-3 py-1.5 rounded transition-colors ${
+            quality === "1080"
+              ? "bg-red-600 text-white"
+              : "bg-gray-800 text-gray-400 hover:text-white"
+          }`}
+        >
+          超清 1080P
+        </button>
+        <button
+          onClick={() => setQuality("720")}
+          className={`text-xs px-3 py-1.5 rounded transition-colors ${
+            quality === "720"
+              ? "bg-red-600 text-white"
+              : "bg-gray-800 text-gray-400 hover:text-white"
+          }`}
+        >
+          高清 720P
+        </button>
+        <button
+          onClick={handleDownload}
+          disabled={!url.trim()}
+          className="ml-auto px-5 py-2 bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500
+                     text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          下载
+        </button>
+      </div>
     </div>
   );
 }

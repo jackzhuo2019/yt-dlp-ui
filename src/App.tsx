@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useStore, initProgressListener } from "@/store";
 import UrlInput from "@/components/UrlInput";
-import FormatPicker from "@/components/FormatPicker";
 import DownloadQueue from "@/components/DownloadQueue";
 import History from "@/components/History";
 
@@ -56,7 +55,6 @@ export default function App() {
         {activeTab === "download" ? (
           <div className="h-full flex flex-col">
             <UrlInput />
-            <FormatPicker />
             <DownloadQueue />
           </div>
         ) : (

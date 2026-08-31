@@ -1,15 +1,3 @@
-// 视频格式
-export interface Format {
-  formatId: string;
-  ext: string;
-  resolution: string;
-  fps: number | null;
-  filesize: number | null;
-  vcodec: string;
-  acodec: string;
-  formatNote: string;
-}
-
 // 下载任务状态
 export type TaskStatus =
   | "queued"
@@ -56,10 +44,4 @@ export interface HistoryRecord {
   filesize: string;
   filepath: string;
   downloadedAt: string;
-}
-
-// 格式查询结果
-export interface FormatResult {
-  title: string;
-  formats: Format[];
 }

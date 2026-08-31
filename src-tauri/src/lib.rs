@@ -14,18 +14,6 @@ struct AppState {
     history: Arc<Mutex<HistoryStore>>,
 }
 
-/// 获取视频格式列表
-#[tauri::command]
-async fn fetch_formats(url: String, state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let ytdlp_path = &state.queue.ytdlp_path;
-    let (title, formats) = ytdlp::fetch_formats(&url, ytdlp_path).await?;
-
-    Ok(serde_json::json!({
-        "title": title,
-        "formats": formats
-    }))
-}
-
 /// 添加下载任务
 #[tauri::command]
 async fn add_task(
@@ -175,7 +163,6 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            fetch_formats,
             add_task,
             get_tasks,
             get_default_output_dir,

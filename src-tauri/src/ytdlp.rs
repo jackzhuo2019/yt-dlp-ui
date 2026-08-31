@@ -4,40 +4,6 @@ use std::process::{Command, Stdio};
 use tauri::Emitter;
 use tokio::sync::Mutex;
 
-/// 视频格式信息
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Format {
-    pub format_id: String,
-    pub ext: String,
-    pub resolution: String,
-    pub fps: Option<f64>,
-    pub filesize: Option<u64>,
-    pub vcodec: String,
-    pub acodec: String,
-    pub format_note: String,
-}
-
-/// yt-dlp -J 输出的原始 JSON 中单个格式的结构
-#[derive(Debug, Deserialize)]
-struct RawFormat {
-    format_id: String,
-    ext: String,
-    resolution: Option<String>,
-    fps: Option<f64>,
-    filesize: Option<u64>,
-    vcodec: Option<String>,
-    acodec: Option<String>,
-    format_note: Option<String>,
-}
-
-/// yt-dlp -J 输出的顶层 JSON
-#[derive(Debug, Deserialize)]
-struct VideoInfo {
-    title: String,
-    formats: Vec<RawFormat>,
-}
-
 /// 下载进度信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,47 +14,6 @@ pub struct DownloadProgress {
     pub eta: String,
     pub total_bytes: String,
     pub downloaded_bytes: String,
-}
-
-/// 获取视频信息和可用格式列表
-pub async fn fetch_formats(url: &str, ytdlp_path: &str) -> Result<(String, Vec<Format>), String> {
-    let ytdlp = ytdlp_path.to_string();
-    let url_owned = url.to_string();
-    let output = tokio::task::spawn_blocking(move || {
-        Command::new(&ytdlp)
-            .args(["-J", "--no-playlist", "--extractor-args", "youtube:player_client=android,ios", &url_owned])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-    })
-    .await
-    .map_err(|e| format!("spawn_blocking 失败: {}", e))?
-    .map_err(|e| format!("无法启动 yt-dlp: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("yt-dlp 错误: {}", stderr));
-    }
-
-    let info: VideoInfo =
-        serde_json::from_slice(&output.stdout).map_err(|e| format!("解析 JSON 失败: {}", e))?;
-
-    let formats: Vec<Format> = info
-        .formats
-        .into_iter()
-        .map(|f| Format {
-            format_id: f.format_id,
-            ext: f.ext,
-            resolution: f.resolution.unwrap_or_default(),
-            fps: f.fps,
-            filesize: f.filesize,
-            vcodec: f.vcodec.unwrap_or_default(),
-            acodec: f.acodec.unwrap_or_default(),
-            format_note: f.format_note.unwrap_or_default(),
-        })
-        .collect();
-
-    Ok((info.title, formats))
 }
 
 /// 执行下载任务，通过 Tauri 事件推送进度
