@@ -1,7 +1,8 @@
 # yt-dlp UI
 
 基于 [yt-dlp](https://github.com/yt-dlp/yt-dlp) 的跨平台视频下载图形界面，使用 **Tauri v2 + React + TypeScript** 构建。
-<img width="958" height="678" alt="image" src="https://github.com/user-attachments/assets/7ed1aeb5-107c-4e20-accb-2d2effe994a4" />
+<img width="953" height="669" alt="image" src="https://github.com/user-attachments/assets/7a2be5f5-9720-45b9-a473-02ea58103588" />
+
 
 
 ## 功能
