@@ -39,12 +39,26 @@ pub async fn run_download(
 
     let result = tokio::task::spawn_blocking(move || {
         let mut command = Command::new(&ytdlp);
+        // 设置 PATH 让 yt-dlp 找到 deno.exe（JS 运行时）
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_default();
+        let current_dir = std::env::current_dir().unwrap_or_default();
+        let extra_path = format!(
+            "{};{};{}",
+            exe_dir.display(),
+            current_dir.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        command.env("PATH", &extra_path);
         command.args([
             &url_owned,
             "-f", &fmt,
             "-o", &format!("{}/%(title)s.%(ext)s", out),
             "--no-playlist", "--newline",
             "--windows-filenames",
+            "--extractor-args", "youtube:player_client=web",
         ]);
 
         let mut last_filepath = String::new();

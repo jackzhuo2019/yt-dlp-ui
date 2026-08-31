@@ -32,7 +32,7 @@ export default function UrlInput() {
   const handleDownload = () => {
     const trimmed = url.trim();
     if (!trimmed) return;
-    const format = quality === "1080" ? "best[height<=1080]" : "best[height<=720]";
+    const format = quality === "1080" ? "best[height<=1080]/best" : "best[height<=720]/best";
     addTask(trimmed, trimmed, format);
     setUrl("");
   };
