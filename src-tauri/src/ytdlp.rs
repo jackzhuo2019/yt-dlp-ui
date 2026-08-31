@@ -62,7 +62,7 @@ pub async fn run_download(
             "--windows-filenames",
         ]);
         if !cookies.is_empty() {
-            command.args(["--cookies-from-browser", &cookies]);
+            command.args(["--cookies", &cookies]);
         }
 
         let mut last_filepath = String::new();

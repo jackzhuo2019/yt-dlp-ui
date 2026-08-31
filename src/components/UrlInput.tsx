@@ -13,6 +13,13 @@ export default function UrlInput() {
   const cookiesFrom = useStore((s) => s.cookiesFrom);
   const setCookiesFrom = useStore((s) => s.setCookiesFrom);
 
+  const handlePickCookies = async () => {
+    const selected = await open({ multiple: false, filters: [{ name: "Cookies", extensions: ["txt"] }] });
+    if (selected) {
+      setCookiesFrom(selected as string);
+    }
+  };
+
   const handlePickFolder = async () => {
     const selected = await open({ directory: true, multiple: false });
     if (selected) {
@@ -106,19 +113,14 @@ export default function UrlInput() {
         >
           高清 720P
         </button>
-        <select
-          value={cookiesFrom}
-          onChange={(e) => setCookiesFrom(e.target.value)}
-          className="text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-400
-                     focus:outline-none focus:border-red-500"
-          title="YouTube 要求登录，选择浏览器读取 cookies（需先关闭该浏览器）"
+        <button
+          onClick={handlePickCookies}
+          className="text-xs px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-400
+                     hover:text-gray-200 hover:border-gray-600 transition-colors truncate max-w-[120px]"
+          title={cookiesFrom || "选择 cookies.txt 文件"}
         >
-          <option value="">无 Cookies</option>
-          <option value="chrome">Chrome</option>
-          <option value="edge">Edge</option>
-          <option value="firefox">Firefox</option>
-        </select>
-        <span className="text-xs text-gray-600">(需先关闭浏览器)</span>
+          {cookiesFrom ? "已选 cookies" : "Cookies"}
+        </button>
         <button
           onClick={handleDownload}
           disabled={!url.trim()}
