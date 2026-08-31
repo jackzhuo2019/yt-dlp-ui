@@ -58,7 +58,7 @@ pub async fn run_download(
         command.args([
             &url_owned,
             "-f", &fmt,
-            "-o", &format!("{}/%(title)s.%(ext)s", out),
+            "-o", &format!("{}/%(id)s.%(ext)s", out),
             "--no-playlist", "--newline",
             "--windows-filenames",
         ]);
