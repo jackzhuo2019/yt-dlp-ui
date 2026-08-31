@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::Emitter;
 use tokio::sync::{Mutex, Semaphore};
@@ -40,7 +41,8 @@ pub struct DownloadQueue {
     pub tasks: Arc<Mutex<HashMap<String, DownloadTask>>>,
     pub order: Arc<Mutex<Vec<String>>>,
     pub semaphore: Arc<Semaphore>,
-    pub cancel_flags: Arc<Mutex<HashMap<String, Arc<Mutex<bool>>>>>,
+    pub cancel_flags: Arc<std::sync::Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    pub child_pids: Arc<std::sync::Mutex<HashMap<String, Arc<std::sync::Mutex<Option<u32>>>>>>,
     pub ytdlp_path: String,
     pub output_dir: String,
 }
@@ -51,7 +53,8 @@ impl DownloadQueue {
             tasks: Arc::new(Mutex::new(HashMap::new())),
             order: Arc::new(Mutex::new(Vec::new())),
             semaphore: Arc::new(Semaphore::new(max_concurrent)),
-            cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            cancel_flags: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            child_pids: Arc::new(std::sync::Mutex::new(HashMap::new())),
             ytdlp_path,
             output_dir,
         }
@@ -136,11 +139,17 @@ impl DownloadQueue {
                 };
 
                 let cancel_flag = {
-                    let mut flags = queue_ref.cancel_flags.lock().await;
-                    let flag = Arc::new(Mutex::new(false));
+                    let mut flags = queue_ref.cancel_flags.lock().unwrap();
+                    let flag = Arc::new(AtomicBool::new(false));
                     flags.insert(task_id.clone(), flag.clone());
                     flag
                 };
+
+                let pid_holder = Arc::new(std::sync::Mutex::new(None::<u32>));
+                {
+                    let mut pids = queue_ref.child_pids.lock().unwrap();
+                    pids.insert(task_id.clone(), pid_holder.clone());
+                }
 
                 // 执行下载
                 let result = ytdlp::run_download(
@@ -150,14 +159,20 @@ impl DownloadQueue {
                     &output_dir,
                     &queue_ref.ytdlp_path,
                     app_handle.clone(),
-                    &cancel_flag,
+                    cancel_flag.clone(),
+                    pid_holder,
                 )
                 .await;
 
                 // 清理取消标志
                 {
-                    let mut flags = queue_ref.cancel_flags.lock().await;
+                    let mut flags = queue_ref.cancel_flags.lock().unwrap();
                     flags.remove(&task_id);
+                }
+                // 清理 PID
+                {
+                    let mut pids = queue_ref.child_pids.lock().unwrap();
+                    pids.remove(&task_id);
                 }
 
                 // 更新最终状态
@@ -171,7 +186,9 @@ impl DownloadQueue {
                                 t.filepath = Some(filepath);
                             }
                             Err(e) => {
-                                if e.contains("已取消") {
+                                if t.status == TaskStatus::Paused {
+                                    // 暂停状态已在 pause() 中设置，保持不变
+                                } else if e.contains("已取消") {
                                     t.status = TaskStatus::Cancelled;
                                 } else {
                                     t.status = TaskStatus::Failed;
@@ -192,11 +209,18 @@ impl DownloadQueue {
         if let Some(t) = tasks.get_mut(task_id) {
             if t.status == TaskStatus::Downloading {
                 t.status = TaskStatus::Paused;
-                // 设置取消标志来停止下载
-                let flags = self.cancel_flags.lock().await;
+                // 设置取消标志
+                let flags = self.cancel_flags.lock().unwrap();
                 if let Some(flag) = flags.get(task_id) {
-                    let mut f = flag.lock().await;
-                    *f = true;
+                    flag.store(true, Ordering::SeqCst);
+                }
+                // 直接杀进程，让阻塞的 reader.lines() 返回 EOF
+                let pids = self.child_pids.lock().unwrap();
+                if let Some(holder) = pids.get(task_id) {
+                    let pid = holder.lock().unwrap();
+                    if let Some(pid) = *pid {
+                        kill_process_by_pid(pid);
+                    }
                 }
                 return Ok(());
             }
@@ -218,10 +242,17 @@ impl DownloadQueue {
             }
         }
 
-        let flags = self.cancel_flags.lock().await;
+        let flags = self.cancel_flags.lock().unwrap();
         if let Some(flag) = flags.get(task_id) {
-            let mut f = flag.lock().await;
-            *f = true;
+            flag.store(true, Ordering::SeqCst);
+        }
+        // 直接杀进程，让阻塞的 reader.lines() 返回 EOF
+        let pids = self.child_pids.lock().unwrap();
+        if let Some(holder) = pids.get(task_id) {
+            let pid = holder.lock().unwrap();
+            if let Some(pid) = *pid {
+                kill_process_by_pid(pid);
+            }
         }
         Ok(())
     }
@@ -236,5 +267,25 @@ impl DownloadQueue {
             }
         }
         Err("无法重新排队".to_string())
+    }
+}
+
+/// 跨平台杀进程
+fn kill_process_by_pid(pid: u32) {
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/PID", &pid.to_string()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new("kill")
+            .args(["-9", &pid.to_string()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
     }
 }

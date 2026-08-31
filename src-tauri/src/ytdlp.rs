@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tauri::Emitter;
-use tokio::sync::Mutex;
 
 /// 下载进度信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,7 +26,8 @@ pub async fn run_download(
     output_dir: &str,
     ytdlp_path: &str,
     app_handle: tauri::AppHandle,
-    _cancel_flag: &Mutex<bool>,
+    cancel_flag: Arc<AtomicBool>,
+    pid_holder: Arc<std::sync::Mutex<Option<u32>>>,
 ) -> Result<String, String> {
     let ytdlp = ytdlp_path.to_string();
     let url_owned = url.to_string();
@@ -47,6 +49,9 @@ pub async fn run_download(
             .spawn()
             .map_err(|e| format!("无法启动下载进程: {}", e))?;
 
+        // 存储 PID，供外部 cancel/pause 杀进程
+        *pid_holder.lock().unwrap() = Some(child.id());
+
         let stdout = child.stdout.take().ok_or("无法获取 stdout")?;
         let stderr = child.stderr.take().ok_or("无法获取 stderr")?;
 
@@ -62,6 +67,13 @@ pub async fn run_download(
         let mut last_filepath = String::new();
 
         for line in reader.lines() {
+            if cancel_flag.load(Ordering::Relaxed) {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = stderr_handle.join();
+                return Err("已取消".to_string());
+            }
+
             let line = line.unwrap_or_default();
 
             if line.contains("[download] Destination:") {
