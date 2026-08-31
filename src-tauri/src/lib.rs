@@ -32,6 +32,7 @@ async fn add_task(
     url: String,
     title: String,
     format_id: String,
+    output_dir: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
     let task = DownloadTask {
@@ -39,6 +40,7 @@ async fn add_task(
         url,
         title,
         format_id,
+        output_dir,
         status: TaskStatus::Queued,
         progress: 0.0,
         speed: String::new(),
@@ -57,6 +59,12 @@ async fn add_task(
 #[tauri::command]
 async fn get_tasks(state: tauri::State<'_, AppState>) -> Result<Vec<DownloadTask>, String> {
     Ok(state.queue.get_all().await)
+}
+
+/// 获取默认下载目录
+#[tauri::command]
+async fn get_default_output_dir(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    Ok(state.queue.output_dir.clone())
 }
 
 /// 暂停任务
@@ -170,6 +178,7 @@ pub fn run() {
             fetch_formats,
             add_task,
             get_tasks,
+            get_default_output_dir,
             pause_task,
             cancel_task,
             requeue_task,

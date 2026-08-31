@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useStore } from "@/store";
+import { open } from "@tauri-apps/plugin-dialog";
 
 export default function UrlInput() {
   const [url, setUrl] = useState("");
@@ -10,6 +11,15 @@ export default function UrlInput() {
   const fetchFormats = useStore((s) => s.fetchFormats);
   const fetchingUrl = useStore((s) => s.fetchingUrl);
   const formatError = useStore((s) => s.formatError);
+  const outputDir = useStore((s) => s.outputDir);
+  const setOutputDir = useStore((s) => s.setOutputDir);
+
+  const handlePickFolder = async () => {
+    const selected = await open({ directory: true, multiple: false });
+    if (selected) {
+      setOutputDir(selected as string);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,9 +45,7 @@ export default function UrlInput() {
       .map((u) => u.trim())
       .filter(Boolean);
     if (urls.length === 0) return;
-    // 批量模式：逐个获取格式
     fetchFormats(urls[0]);
-    // 后续 URL 存储备用
     if (urls.length > 1) {
       setBatchUrls(urls.slice(1).join("\n"));
     }
@@ -45,6 +53,20 @@ export default function UrlInput() {
 
   return (
     <div className="px-5 py-4 border-b border-gray-800 bg-gray-900/50">
+      {/* 保存位置 */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs text-gray-500 shrink-0">保存位置:</span>
+        <button
+          onClick={handlePickFolder}
+          className="flex-1 text-left text-xs bg-gray-800 border border-gray-700 rounded px-3 py-1.5
+                     text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors
+                     truncate"
+          title={outputDir || "点击选择文件夹"}
+        >
+          {outputDir || "点击选择文件夹..."}
+        </button>
+      </div>
+
       <div className="flex items-center gap-2 mb-2">
         <button
           onClick={() => setBatchMode(false)}

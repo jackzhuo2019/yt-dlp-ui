@@ -19,8 +19,12 @@ interface AppStore {
   formatError: string | null;
   // 活跃标签页
   activeTab: "download" | "history";
+  // 下载保存目录
+  outputDir: string;
 
   // 操作
+  initOutputDir: () => Promise<void>;
+  setOutputDir: (dir: string) => void;
   fetchFormats: (url: string) => Promise<void>;
   addTask: (url: string, title: string, formatId: string) => Promise<void>;
   refreshTasks: () => Promise<void>;
@@ -42,6 +46,18 @@ export const useStore = create<AppStore>((set, get) => ({
   formatResult: null,
   formatError: null,
   activeTab: "download",
+  outputDir: "",
+
+  initOutputDir: async () => {
+    try {
+      const dir = await invoke<string>("get_default_output_dir");
+      set({ outputDir: dir });
+    } catch {
+      // 使用默认值
+    }
+  },
+
+  setOutputDir: (dir: string) => set({ outputDir: dir }),
 
   fetchFormats: async (url: string) => {
     set({ fetchingUrl: url, formatError: null, formatResult: null });
@@ -54,7 +70,8 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   addTask: async (url: string, title: string, formatId: string) => {
-    await invoke("add_task", { url, title, formatId });
+    const outputDir = get().outputDir;
+    await invoke("add_task", { url, title, formatId, outputDir });
     await get().refreshTasks();
   },
 

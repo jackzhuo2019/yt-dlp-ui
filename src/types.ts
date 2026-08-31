@@ -25,6 +25,7 @@ export interface DownloadTask {
   url: string;
   title: string;
   formatId: string;
+  outputDir: string;
   status: TaskStatus;
   progress: number;
   speed: string;

@@ -8,9 +8,11 @@ import History from "@/components/History";
 export default function App() {
   const activeTab = useStore((s) => s.activeTab);
   const setActiveTab = useStore((s) => s.setActiveTab);
+  const initOutputDir = useStore((s) => s.initOutputDir);
 
   useEffect(() => {
     initProgressListener();
+    initOutputDir();
   }, []);
 
   return (
