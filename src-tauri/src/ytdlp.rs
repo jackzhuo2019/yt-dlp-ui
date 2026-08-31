@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::process::Stdio;
+use std::io::{BufRead, BufReader};
+use std::process::{Command, Stdio};
 use tauri::Emitter;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::Mutex;
 
 /// 视频格式信息
@@ -53,13 +52,18 @@ pub struct DownloadProgress {
 
 /// 获取视频信息和可用格式列表
 pub async fn fetch_formats(url: &str, ytdlp_path: &str) -> Result<(String, Vec<Format>), String> {
-    let output = Command::new(ytdlp_path)
-        .args(["-J", "--no-playlist", "--extractor-args", "youtube:player_client=android,ios", url])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|e| format!("无法启动 yt-dlp: {}", e))?;
+    let ytdlp = ytdlp_path.to_string();
+    let url_owned = url.to_string();
+    let output = tokio::task::spawn_blocking(move || {
+        Command::new(&ytdlp)
+            .args(["-J", "--no-playlist", "--extractor-args", "youtube:player_client=android,ios", &url_owned])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking 失败: {}", e))?
+    .map_err(|e| format!("无法启动 yt-dlp: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -88,7 +92,7 @@ pub async fn fetch_formats(url: &str, ytdlp_path: &str) -> Result<(String, Vec<F
 }
 
 /// 执行下载任务，通过 Tauri 事件推送进度
-/// yt-dlp 的下载进度和 Destination 都在 stderr
+/// 使用 std::process::Command + spawn_blocking 读取 stdout（yt-dlp 进度在 stdout）
 pub async fn run_download(
     task_id: &str,
     url: &str,
@@ -96,87 +100,77 @@ pub async fn run_download(
     output_dir: &str,
     ytdlp_path: &str,
     app_handle: tauri::AppHandle,
-    cancel_flag: &Mutex<bool>,
+    _cancel_flag: &Mutex<bool>,
 ) -> Result<String, String> {
-    let mut child = Command::new(ytdlp_path)
-        .args([
-            url,
-            "-f",
-            format_id,
-            "-o",
-            &format!("{}/%(title)s.%(ext)s", output_dir),
-            "--no-playlist",
-            "--newline",
-            "--extractor-args",
-            "youtube:player_client=android,ios",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| format!("无法启动下载进程: {}", e))?;
+    let ytdlp = ytdlp_path.to_string();
+    let url_owned = url.to_string();
+    let fmt = format_id.to_string();
+    let out = output_dir.to_string();
+    let tid = task_id.to_string();
 
-    let stdout = child.stdout.take().ok_or("无法获取 stdout")?;
-    let stderr = child.stderr.take().ok_or("无法获取 stderr")?;
+    let result = tokio::task::spawn_blocking(move || {
+        let mut child = Command::new(&ytdlp)
+            .args([
+                &url_owned,
+                "-f", &fmt,
+                "-o", &format!("{}/%(title)s.%(ext)s", out),
+                "--no-playlist", "--newline",
+                "--extractor-args", "youtube:player_client=android,ios",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("无法启动下载进程: {}", e))?;
 
-    // 后台读取 stderr（仅用于错误收集）
-    let mut stderr_lines = Vec::new();
-    let stderr_handle = tokio::spawn(async move {
-        let mut reader = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            stderr_lines.push(line);
-        }
-        stderr_lines
-    });
+        let stdout = child.stdout.take().ok_or("无法获取 stdout")?;
+        let stderr = child.stderr.take().ok_or("无法获取 stderr")?;
 
-    // 主线程读取 stdout（进度在这里）
-    let mut reader = BufReader::new(stdout).lines();
-    let mut last_filepath = String::new();
+        // 读取 stderr 到另一个线程
+        let stderr_handle = std::thread::spawn(move || {
+            BufReader::new(stderr).lines()
+                .filter_map(|l| l.ok())
+                .collect::<Vec<_>>()
+        });
 
-    while let Ok(Some(line)) = reader.next_line().await {
-        // 检查取消标志
-        {
-            let cancelled = cancel_flag.lock().await;
-            if *cancelled {
-                child.kill().await.ok();
-                stderr_handle.abort();
-                return Err("任务已取消".to_string());
+        // 主线程读取 stdout
+        let reader = BufReader::new(stdout);
+        let mut last_filepath = String::new();
+
+        for line in reader.lines() {
+            let line = line.unwrap_or_default();
+
+            if line.contains("[download] Destination:") {
+                last_filepath = line
+                    .replace("[download] Destination:", "")
+                    .trim().to_string();
+            }
+
+            if let Some(progress) = parse_download_progress(&line, &tid) {
+                let _ = app_handle.emit("download-progress", &progress);
             }
         }
 
-        // 捕获目标文件路径
-        if line.contains("[download] Destination:") {
-            last_filepath = line
-                .replace("[download] Destination:", "")
-                .trim()
-                .to_string();
+        let status = child.wait().map_err(|e| format!("等待进程失败: {}", e))?;
+        let stderr_output = stderr_handle.join().unwrap_or_default();
+
+        if !status.success() {
+            let err_msg = if !stderr_output.is_empty() {
+                stderr_output.join("\n")
+            } else {
+                format!("退出码: {:?}", status.code())
+            };
+            return Err(format!("下载失败: {}", err_msg));
         }
 
-        // 解析进度: [download]   XX.X% of ~XXX at XXX/s ETA XX:XX
-        if let Some(progress) = parse_download_progress(&line, task_id) {
-            let _ = app_handle.emit("download-progress", &progress);
+        if last_filepath.is_empty() {
+            last_filepath = "下载完成（未能获取文件路径）".to_string();
         }
-    }
+        Ok(last_filepath)
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking 失败: {}", e))?;
 
-    let status = child.wait().await.map_err(|e| format!("等待进程失败: {}", e))?;
-
-    // 收集 stderr 错误信息
-    let stderr_output = stderr_handle.await.unwrap_or_default();
-
-    if !status.success() {
-        let err_msg = if !stderr_output.is_empty() {
-            stderr_output.join("\n")
-        } else {
-            format!("退出码: {:?}", status.code())
-        };
-        return Err(format!("下载失败: {}", err_msg));
-    }
-
-    if last_filepath.is_empty() {
-        last_filepath = "下载完成（未能获取文件路径）".to_string();
-    }
-
-    Ok(last_filepath)
+    result
 }
 
 /// 解析 yt-dlp 默认进度行: [download]  XX.X% of ~XXX at XXX/s ETA XX:XX
