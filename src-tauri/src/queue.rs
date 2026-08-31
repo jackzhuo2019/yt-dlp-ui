@@ -186,8 +186,10 @@ impl DownloadQueue {
                                 t.filepath = Some(filepath);
                             }
                             Err(e) => {
-                                if t.status == TaskStatus::Paused {
-                                    // 暂停状态已在 pause() 中设置，保持不变
+                                if t.status == TaskStatus::Paused
+                                    || t.status == TaskStatus::Cancelled
+                                {
+                                    // 状态已由 pause()/cancel() 设置，保持不变
                                 } else if e.contains("已取消") {
                                     t.status = TaskStatus::Cancelled;
                                 } else {
@@ -270,12 +272,12 @@ impl DownloadQueue {
     }
 }
 
-/// 跨平台杀进程
+/// 跨平台杀进程（含子进程树）
 fn kill_process_by_pid(pid: u32) {
     #[cfg(windows)]
     {
         let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/PID", &pid.to_string()])
+            .args(["/F", "/T", "/PID", &pid.to_string()])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn();
