@@ -80,7 +80,7 @@ export default function CookiesModal() {
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-850 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+        <div className="absolute top-full left-0 mt-2 w-64 bg-gray-850 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
           {/* 头部 */}
           <div className="px-3 py-2 border-b border-gray-700 flex items-center justify-between">
             <span className="text-xs text-gray-400">Cookies 来源</span>
