@@ -37,14 +37,20 @@ git commit -m "<type>: <description>"
 yt-dlp-ui/
 ├── src/                  # React 前端
 │   ├── components/       # UI 组件
+│   │   ├── UrlInput.tsx  # URL 输入 & 解析
+│   │   ├── DownloadQueue.tsx  # 下载队列
+│   │   ├── CookiesModal.tsx   # Cookies 提取弹窗
+│   │   └── History.tsx   # 下载历史
 │   ├── store.ts          # Zustand 状态管理
 │   └── types.ts          # 共享类型
 ├── src-tauri/            # Rust 后端
 │   ├── src/
+│   │   ├── main.rs       # Tauri 入口
 │   │   ├── lib.rs        # Tauri 命令注册
 │   │   ├── ytdlp.rs      # yt-dlp 进程调用 & 进度解析
 │   │   ├── queue.rs      # 下载队列调度
-│   │   ├── history.rs    # 历史记录存储
+│   │   ├── cookies_extract.rs  # 浏览器 Cookies 提取
+│   │   ├── history.rs    # 历史记录存储（JSON 文件）
 │   │   └── bin/          # 独立测试二进制
 │   └── tauri.conf.json
 ├── dist/                 # 前端构建产物
@@ -72,3 +78,4 @@ cd src-tauri && cargo run --bin test_progress
 - **yt-dlp 进度在 stdout**：下载进度 `[download] XX%` 输出在 stdout，不是 stderr
 - **JS 运行时**：yt-dlp 需要 deno 等 JS 运行时来提取 YouTube 视频格式，已用 `--extractor-args "youtube:player_client=android,ios"` 绕过
 - **Tauri 事件**：`app_handle.emit()` 需要 `use tauri::Emitter;` 导入 trait
+- **Edge Cookie 提取**：Edge 浏览器默认启用了"启动增强"和"后台扩展"，会锁定 Cookie 数据库。用户需前往 `edge://settings/system` 关闭这两个选项后，才能正常提取。
