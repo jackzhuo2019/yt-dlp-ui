@@ -42,14 +42,18 @@ pub async fn run_download(
 
     let result = tokio::task::spawn_blocking(move || {
         let mut command = Command::new(&ytdlp);
-        // 设置 PATH 让 yt-dlp 找到 deno.exe（JS 运行时）
+        hide_window(&mut command);
+        // 设置 PATH 让 yt-dlp 找到 deno.exe/ffmpeg.exe/ffprobe.exe
+        // 打包后这些工具在 exe 同级的 _up_ 目录（bundle 资源映射）
         let exe_dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
             .unwrap_or_default();
+        let resource_dir = exe_dir.join("_up_");
         let current_dir = std::env::current_dir().unwrap_or_default();
         let extra_path = format!(
-            "{};{};{}",
+            "{};{};{};{}",
+            resource_dir.display(),
             exe_dir.display(),
             current_dir.display(),
             std::env::var("PATH").unwrap_or_default()
@@ -63,6 +67,13 @@ pub async fn run_download(
             "--no-playlist", "--newline",
             "--windows-filenames",
         ]);
+
+        // 合并流下载（格式含 "+"）依赖 ffmpeg，缺失时提前给出友好提示
+        if fmt.contains('+') && !ffmpeg_available(&extra_path) {
+            return Err(
+                "缺少 ffmpeg：该画质需要合并独立的视频流和音频流，请先安装 ffmpeg（运行 winget install ffmpeg 或从 https://www.gyan.dev/ffmpeg/builds/ 下载），安装后重启本应用再试".to_string(),
+            );
+        }
         if !cookies.is_empty() {
             command.args(["--cookies", &cookies]);
         }
@@ -98,6 +109,30 @@ pub async fn run_download(
     .map_err(|e| format!("spawn_blocking 失败: {}", e))?;
 
     result
+}
+
+/// 隐藏子进程的控制台窗口（Windows 下 GUI 应用启动控制台进程时默认会弹窗）
+#[cfg(windows)]
+fn hide_window(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_window(_cmd: &mut Command) {}
+
+/// 检查 ffmpeg 是否可用（在增强后的 PATH 中查找）
+fn ffmpeg_available(extra_path: &str) -> bool {
+    let mut cmd = Command::new("ffmpeg");
+    hide_window(&mut cmd);
+    cmd.arg("-version")
+        .env("PATH", extra_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 /// 运行命令并逐行读取 stdout，支持随时取消。
@@ -185,6 +220,15 @@ fn run_command_with_cancel(
         } else {
             format!("退出码: {:?}", status.code())
         };
+        // 将 ffmpeg 缺失相关的报错翻译为友好提示
+        if err_msg.contains("ffmpeg is not installed")
+            || err_msg.contains("merging of multiple formats")
+            || err_msg.contains("ffprobe")
+        {
+            return Err(
+                "缺少 ffmpeg：无法合并视频流和音频流，请先安装 ffmpeg（运行 winget install ffmpeg 或从 https://www.gyan.dev/ffmpeg/builds/ 下载），安装后重启本应用再试".to_string(),
+            );
+        }
         return Err(format!("下载失败: {}", err_msg));
     }
 
@@ -201,7 +245,9 @@ pub async fn extract_cookies(browser: &str, ytdlp_path: &str) -> Result<String, 
         .join(format!("cookies-{}.txt", browser));
 
     let result = tokio::task::spawn_blocking(move || {
-        let output = Command::new(&ytdlp)
+        let mut cmd = Command::new(&ytdlp);
+        hide_window(&mut cmd);
+        let output = cmd
             .args([
                 "--cookies-from-browser", &browser,
                 "--cookies", &cookies_path.to_string_lossy(),
@@ -252,6 +298,7 @@ pub async fn resolve_urls(urls: Vec<String>, ytdlp_path: &str) -> Result<Vec<Res
             if trimmed.is_empty() { continue; }
 
             let mut cmd = Command::new(&ytdlp);
+            hide_window(&mut cmd);
             cmd.args([
                 trimmed,
                 "--flat-playlist",
@@ -284,6 +331,7 @@ pub async fn resolve_urls(urls: Vec<String>, ytdlp_path: &str) -> Result<Vec<Res
             if !found {
                 // 回退: 不带 --flat-playlist
                 let mut cmd2 = Command::new(&ytdlp);
+                hide_window(&mut cmd2);
                 cmd2.args([trimmed, "--dump-json", "--skip-download", "--no-playlist", "--no-warnings", "--no-color"])
                     .env("PYTHONUTF8", "1")
                     .stdout(Stdio::piped())

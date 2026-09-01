@@ -38,8 +38,13 @@ export default function UrlInput() {
     setShowResolved(true);
   };
 
+  const makeFormat = () =>
+    quality === "1080"
+      ? "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
+      : "bestvideo[height<=720]+bestaudio/best[height<=720]/best";
+
   const handleDownloadAll = () => {
-    const format = quality === "1080" ? "best[height<=1080]/best" : "best[height<=720]/best";
+    const format = makeFormat();
     for (const entry of resolvedEntries) {
       addTask(entry.url, entry.title, format, cookiesFrom);
     }
@@ -49,7 +54,7 @@ export default function UrlInput() {
   };
 
   const handleDownloadSingle = (entry: { title: string; url: string }) => {
-    const format = quality === "1080" ? "best[height<=1080]/best" : "best[height<=720]/best";
+    const format = makeFormat();
     addTask(entry.url, entry.title, format, cookiesFrom);
   };
 
@@ -148,7 +153,7 @@ export default function UrlInput() {
             onClick={() => {
               const trimmed = url.trim();
               if (!trimmed) return;
-              const format = quality === "1080" ? "best[height<=1080]/best" : "best[height<=720]/best";
+              const format = makeFormat();
               addTask(trimmed, trimmed, format, cookiesFrom);
               setUrl("");
             }}

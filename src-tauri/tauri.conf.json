@@ -36,7 +36,8 @@
       "icons/icon.png"
     ],
     "resources": [
-      "../yt-dlp.exe"
+      "../yt-dlp.exe",
+      "../deno.exe"
     ]
   },
   "plugins": {

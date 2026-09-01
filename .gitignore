@@ -9,3 +9,4 @@ target/
 *.webm
 cookies.txt
 cookies-*.txt
+.tools/

@@ -148,17 +148,31 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
-            // 获取 yt-dlp 路径：优先从 Cargo 清单目录（开发模式）查找
-            let ytdlp_path = std::env::var("CARGO_MANIFEST_DIR")
-                .map(|d| std::path::PathBuf::from(d).join("..").join("yt-dlp.exe"))
+            // 获取 yt-dlp 路径：优先从应用资源目录（打包后）查找
+            // 注意：bundle 中 "../yt-dlp.exe" 会被映射为 "_up_/yt-dlp.exe"，
+            // path().resolve() 会自动处理该映射
+            let ytdlp_path = app
+                .path()
+                .resolve("../yt-dlp.exe", tauri::path::BaseDirectory::Resource)
                 .ok()
-                .or_else(|| {
-                    // 尝试从当前工作目录查找
-                    std::env::current_dir()
-                        .ok()
-                        .map(|d| d.join("yt-dlp.exe"))
-                })
                 .filter(|p| p.exists())
+                .or_else(|| {
+                    // 兼容资源直接平铺的情况
+                    app.path()
+                        .resource_dir()
+                        .ok()
+                        .and_then(|d| {
+                            let p = d.join("yt-dlp.exe");
+                            p.exists().then_some(p)
+                        })
+                })
+                .or_else(|| {
+                    // 开发模式：从 Cargo 清单目录查找
+                    std::env::var("CARGO_MANIFEST_DIR")
+                        .ok()
+                        .map(|d| std::path::PathBuf::from(d).join("..").join("yt-dlp.exe"))
+                        .filter(|p| p.exists())
+                })
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|| "yt-dlp.exe".to_string());
 

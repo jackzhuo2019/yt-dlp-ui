@@ -278,10 +278,13 @@ impl DownloadQueue {
 fn kill_process_by_pid(pid: u32) {
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let _ = std::process::Command::new("taskkill")
             .args(["/F", "/T", "/PID", &pid.to_string()])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW)
             .spawn();
     }
     #[cfg(not(windows))]
