@@ -219,7 +219,7 @@ pub async fn extract_cookies(browser: &str, ytdlp_path: &str) -> Result<String, 
             let stderr = String::from_utf8_lossy(&output.stderr);
             // 提取 cookies 可能部分成功，检查文件是否已生成
             if !cookies_path.exists() {
-                return Err(format!("提取失败: {}", stderr));
+                let msg = if stderr.contains("Could not copy") && stderr.contains("cookie database") { format!("无法读取 {} 的 cookie 数据库。请关闭浏览器后重试。", browser) } else { format!("提取失败: {}", stderr) }; return Err(msg);
             }
         }
         Ok(cookies_path.to_string_lossy().to_string())
