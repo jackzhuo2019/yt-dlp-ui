@@ -96,17 +96,45 @@ fn find_browser_paths(browser: &str) -> Result<(String, String), String> {
 
 /// 查找 Chrome 系浏览器可执行文件
 fn find_chrome_exe(base: &str, vendor: &str, product: &str) -> Result<String, String> {
-    let paths = [
-        format!("{}\\{}\\Application\\{}.exe", base, vendor, product.to_lowercase()),
-        format!("C:\\Program Files\\{}\\Application\\{}.exe", vendor, product.to_lowercase()),
-        format!("C:\\Program Files (x86)\\{}\\Application\\{}.exe", vendor, product.to_lowercase()),
+    // 不同浏览器可执行文件名不同
+    let exe_name = match product.to_lowercase().as_str() {
+        "chrome" => "chrome.exe",
+        "edge" => "msedge.exe",
+        "brave-browser" => "brave.exe",
+        _ => &format!("{}.exe", product.to_lowercase()),
+    };
+
+    let candidates = [
+        format!("C:\\Program Files (x86)\\{}\\Application\\{}", vendor, exe_name),
+        format!("C:\\Program Files\\{}\\Application\\{}", vendor, exe_name),
+        format!("{}\\{}\\Application\\{}", base, vendor, exe_name),
     ];
 
-    for p in &paths {
+    for p in &candidates {
         if std::path::Path::new(p).exists() {
             return Ok(p.clone());
         }
     }
+
+    // 回退：搜索目录下所有 .exe
+    for dir in &[
+        format!("C:\\Program Files (x86)\\{}\\Application", vendor),
+        format!("C:\\Program Files\\{}\\Application", vendor),
+        format!("{}\\{}\\Application", base, vendor),
+    ] {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().map(|e| e == "exe").unwrap_or(false) {
+                    let name = path.file_stem().unwrap_or_default().to_string_lossy().to_lowercase();
+                    if name.contains(&product.to_lowercase()) || name == exe_name.replace(".exe", "") {
+                        return Ok(path.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+
     Err(format!("找不到 {} 浏览器可执行文件", product))
 }
 
