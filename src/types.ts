@@ -45,3 +45,10 @@ export interface HistoryRecord {
   filepath: string;
   downloadedAt: string;
 }
+
+// URL 解析结果
+export interface ResolvedEntry {
+  title: string;
+  url: string;
+  sourceUrl: string;
+}

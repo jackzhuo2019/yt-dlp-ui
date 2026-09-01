@@ -112,6 +112,21 @@ async fn add_history(
     store.add(&url, &title, &format_id, &ext, &resolution, &filesize, &filepath)
 }
 
+
+/// 解析 URL 列表，展开播放列表/频道
+#[tauri::command]
+async fn resolve_urls(
+    urls: Vec<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<ytdlp::ResolvedEntry>, String> {
+    let ytdlp_path = state.queue.ytdlp_path.clone();
+    tokio::task::spawn_blocking(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(ytdlp::resolve_urls(urls, &ytdlp_path))
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
+}
 /// 从浏览器提取 cookies（直接读 SQLite 数据库，无需 yt-dlp）
 #[tauri::command]
 async fn extract_cookies(
@@ -180,6 +195,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            resolve_urls,
             add_task,
             get_tasks,
             get_default_output_dir,
@@ -194,3 +210,4 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("启动应用失败");
 }
+

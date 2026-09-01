@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { DownloadTask, DownloadProgress, HistoryRecord } from "@/types";
+import type { DownloadTask, DownloadProgress, HistoryRecord, ResolvedEntry } from "@/types";
 
 interface AppStore {
   tasks: DownloadTask[];
@@ -11,6 +11,8 @@ interface AppStore {
   cookiesFrom: string;
   cookiesExtracting: boolean;
   cookiesError: string | null;
+  resolving: boolean;
+  resolvedEntries: ResolvedEntry[];
 
   initOutputDir: () => Promise<void>;
   setOutputDir: (dir: string) => void;
@@ -24,6 +26,8 @@ interface AppStore {
   deleteHistory: (id: string) => Promise<void>;
   setActiveTab: (tab: "download" | "history") => void;
   extractCookies: (browser: string) => Promise<void>;
+  resolveUrls: (urls: string[]) => Promise<void>;
+  clearResolved: () => void;
 }
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -34,6 +38,8 @@ export const useStore = create<AppStore>((set, get) => ({
   cookiesFrom: "",
   cookiesExtracting: false,
   cookiesError: null,
+  resolving: false,
+  resolvedEntries: [],
 
   initOutputDir: async () => {
     try {
@@ -73,6 +79,21 @@ export const useStore = create<AppStore>((set, get) => ({
     await invoke("requeue_task", { taskId: id });
     await get().refreshTasks();
   },
+
+  resolveUrls: async (urls: string[]) => {
+    set({ resolving: true, resolvedEntries: [] });
+    try {
+      const entries = await invoke<ResolvedEntry[]>('resolve_urls', { urls });
+      set({ resolvedEntries: entries, resolving: false });
+    } catch (e) {
+      set({
+        resolving: false,
+        cookiesError: typeof e === 'string' ? e : '解析 URL 失败',
+      });
+    }
+  },
+
+  clearResolved: () => set({ resolvedEntries: [] }),
 
   extractCookies: async (browser: string) => {
     set({ cookiesExtracting: true, cookiesError: null });

@@ -230,6 +230,90 @@ pub async fn extract_cookies(browser: &str, ytdlp_path: &str) -> Result<String, 
     result
 }
 
+
+/// 解析 URL 列表，返回视频条目（展开播放列表/频道）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedEntry {
+    pub title: String,
+    pub url: String,
+    pub source_url: String,
+}
+
+pub async fn resolve_urls(urls: Vec<String>, ytdlp_path: &str) -> Result<Vec<ResolvedEntry>, String> {
+    let ytdlp = ytdlp_path.to_string();
+    let urls_clone = urls.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let mut entries = Vec::new();
+
+        for url in &urls_clone {
+            let trimmed = url.trim();
+            if trimmed.is_empty() { continue; }
+
+            let mut cmd = Command::new(&ytdlp);
+            cmd.args([
+                trimmed,
+                "--flat-playlist",
+                "--dump-json",
+                "--skip-download",
+                "--no-warnings",
+                "--no-color",
+            ])
+            .env("PYTHONUTF8", "1")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+
+            let output = cmd.output().map_err(|e| format!("无法启动 yt-dlp: {}", e))?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let mut found = false;
+
+            for line in stdout.lines() {
+                let line = line.trim();
+                if line.is_empty() { continue; }
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+                    let title = json["title"].as_str().unwrap_or("未知").to_string();
+                    let video_url = json["webpage_url"].as_str()
+                        .or_else(|| json["url"].as_str())
+                        .unwrap_or(trimmed).to_string();
+                    entries.push(ResolvedEntry { title, url: video_url, source_url: trimmed.to_string() });
+                    found = true;
+                }
+            }
+
+            if !found {
+                // 回退: 不带 --flat-playlist
+                let mut cmd2 = Command::new(&ytdlp);
+                cmd2.args([trimmed, "--dump-json", "--skip-download", "--no-playlist", "--no-warnings", "--no-color"])
+                    .env("PYTHONUTF8", "1")
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::null());
+                let output2 = cmd2.output().map_err(|e| format!("无法启动 yt-dlp: {}", e))?;
+                let stdout2 = String::from_utf8_lossy(&output2.stdout);
+                for line in stdout2.lines() {
+                    let line = line.trim();
+                    if line.is_empty() { continue; }
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+                        let title = json["title"].as_str().unwrap_or("未知").to_string();
+                        let video_url = json["webpage_url"].as_str()
+                            .or_else(|| json["url"].as_str())
+                            .unwrap_or(trimmed).to_string();
+                        entries.push(ResolvedEntry { title, url: video_url, source_url: trimmed.to_string() });
+                        found = true;
+                    }
+                }
+            }
+
+            if !found {
+                return Err(format!("无法解析 URL: {}", trimmed));
+            }
+        }
+        Ok(entries)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
+}
+
 fn parse_download_progress(line: &str, task_id: &str) -> Option<DownloadProgress> {
     if !line.contains("[download]") {
         return None;
@@ -406,3 +490,4 @@ mod tests {
         assert_eq!(p.total_bytes, "100.00MiB");
     }
 }
+
