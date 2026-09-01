@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -191,6 +192,44 @@ fn run_command_with_cancel(
 }
 
 /// 解析 yt-dlp 默认进度行: [download]  XX.X% of ~XXX at XXX/s ETA XX:XX
+/// 从浏览器提取 cookies 到文件
+pub async fn extract_cookies(browser: &str, ytdlp_path: &str) -> Result<String, String> {
+    let ytdlp = ytdlp_path.to_string();
+    let browser = browser.to_string();
+    let cookies_path = std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join(format!("cookies-{}.txt", browser));
+
+    let result = tokio::task::spawn_blocking(move || {
+        let output = Command::new(&ytdlp)
+            .args([
+                "--cookies-from-browser", &browser,
+                "--cookies", &cookies_path.to_string_lossy(),
+                "https://www.youtube.com/",
+                "--skip-download",
+                "--no-playlist",
+            ])
+            .env("PYTHONUTF8", "1")
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| format!("无法启动 yt-dlp: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // 提取 cookies 可能部分成功，检查文件是否已生成
+            if !cookies_path.exists() {
+                return Err(format!("提取失败: {}", stderr));
+            }
+        }
+        Ok(cookies_path.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking 失败: {}", e))?;
+
+    result
+}
+
 fn parse_download_progress(line: &str, task_id: &str) -> Option<DownloadProgress> {
     if !line.contains("[download]") {
         return None;

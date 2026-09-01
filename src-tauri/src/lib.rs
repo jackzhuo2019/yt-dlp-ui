@@ -111,6 +111,17 @@ async fn add_history(
     store.add(&url, &title, &format_id, &ext, &resolution, &filesize, &filepath)
 }
 
+/// 从浏览器提取 cookies 到文件
+#[tauri::command]
+async fn extract_cookies(
+    browser: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    let ytdlp_path = state.queue.ytdlp_path.clone();
+    let cookies_path = ytdlp::extract_cookies(&browser, &ytdlp_path).await?;
+    Ok(cookies_path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -174,6 +185,7 @@ pub fn run() {
             get_history,
             delete_history,
             add_history,
+            extract_cookies,
         ])
         .run(tauri::generate_context!())
         .expect("启动应用失败");

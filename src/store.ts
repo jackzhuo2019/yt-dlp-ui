@@ -9,6 +9,8 @@ interface AppStore {
   activeTab: "download" | "history";
   outputDir: string;
   cookiesFrom: string;
+  cookiesExtracting: boolean;
+  cookiesError: string | null;
 
   initOutputDir: () => Promise<void>;
   setOutputDir: (dir: string) => void;
@@ -21,6 +23,7 @@ interface AppStore {
   refreshHistory: (query?: string) => Promise<void>;
   deleteHistory: (id: string) => Promise<void>;
   setActiveTab: (tab: "download" | "history") => void;
+  extractCookies: (browser: string) => Promise<void>;
 }
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -29,6 +32,8 @@ export const useStore = create<AppStore>((set, get) => ({
   activeTab: "download",
   outputDir: "",
   cookiesFrom: "",
+  cookiesExtracting: false,
+  cookiesError: null,
 
   initOutputDir: async () => {
     try {
@@ -67,6 +72,19 @@ export const useStore = create<AppStore>((set, get) => ({
   requeueTask: async (id: string) => {
     await invoke("requeue_task", { taskId: id });
     await get().refreshTasks();
+  },
+
+  extractCookies: async (browser: string) => {
+    set({ cookiesExtracting: true, cookiesError: null });
+    try {
+      const path = await invoke<string>("extract_cookies", { browser });
+      set({ cookiesFrom: path, cookiesExtracting: false });
+    } catch (e) {
+      set({
+        cookiesExtracting: false,
+        cookiesError: typeof e === "string" ? e : "提取 cookies 失败",
+      });
+    }
   },
 
   refreshHistory: async (query?: string) => {

@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useStore } from "@/store";
 import { open } from "@tauri-apps/plugin-dialog";
+import CookiesModal from "@/components/CookiesModal";
 
 export default function UrlInput() {
   const [url, setUrl] = useState("");
@@ -11,14 +12,6 @@ export default function UrlInput() {
   const outputDir = useStore((s) => s.outputDir);
   const setOutputDir = useStore((s) => s.setOutputDir);
   const cookiesFrom = useStore((s) => s.cookiesFrom);
-  const setCookiesFrom = useStore((s) => s.setCookiesFrom);
-
-  const handlePickCookies = async () => {
-    const selected = await open({ multiple: false, filters: [{ name: "Cookies", extensions: ["txt"] }] });
-    if (selected) {
-      setCookiesFrom(selected as string);
-    }
-  };
 
   const handlePickFolder = async () => {
     const selected = await open({ directory: true, multiple: false });
@@ -113,14 +106,7 @@ export default function UrlInput() {
         >
           高清 720P
         </button>
-        <button
-          onClick={handlePickCookies}
-          className="text-xs px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-400
-                     hover:text-gray-200 hover:border-gray-600 transition-colors truncate max-w-[120px]"
-          title={cookiesFrom || "选择 cookies.txt 文件"}
-        >
-          {cookiesFrom ? "已选 cookies" : "Cookies"}
-        </button>
+        <CookiesModal />
         <button
           onClick={handleDownload}
           disabled={!url.trim()}
