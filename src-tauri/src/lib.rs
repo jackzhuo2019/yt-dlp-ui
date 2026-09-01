@@ -1,4 +1,4 @@
-mod cookies_cdp;
+mod cookies_extract;
 mod history;
 mod queue;
 mod ytdlp;
@@ -112,29 +112,18 @@ async fn add_history(
     store.add(&url, &title, &format_id, &ext, &resolution, &filesize, &filepath)
 }
 
-/// 从浏览器提取 cookies 到文件
+/// 从浏览器提取 cookies（直接读 SQLite 数据库，无需 yt-dlp）
 #[tauri::command]
-/// 从浏览器提取 cookies（优先使用 CDP，yt-dlp 作为回退）
 async fn extract_cookies(
     browser: String,
-    state: tauri::State<'_, AppState>,
+    _state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let ytdlp_path = state.queue.ytdlp_path.clone();
-
-    // Chromium 系浏览器优先使用 CDP（无需关闭浏览器）
-    let cdp_browsers = ["chrome", "edge", "brave", "chromium", "opera", "vivaldi"];
-    if cdp_browsers.contains(&browser.to_lowercase().as_str()) {
-        match cookies_cdp::extract_cookies_cdp(&browser).await {
-            Ok(path) => return Ok(path),
-            Err(e) => {
-                // CDP 失败，回退到 yt-dlp
-                eprintln!("CDP 提取失败 ({}), 回退到 yt-dlp", e);
-            }
-        }
-    }
-
-    let cookies_path = ytdlp::extract_cookies(&browser, &ytdlp_path).await?;
-    Ok(cookies_path)
+    let browser_clone = browser.clone();
+    tokio::task::spawn_blocking(move || {
+        cookies_extract::extract_cookies(&browser_clone)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
